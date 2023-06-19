@@ -1,7 +1,5 @@
 import numpy as np
-import matplotlib.pyplot as plt
-from skimage import filters, feature, img_as_int
-from skimage.measure import regionprops
+from skimage import filters, feature
 
 
 def get_interest_points(image, feature_width):
@@ -47,9 +45,55 @@ def get_interest_points(image, feature_width):
 
     # TODO: Your implementation here!
 
-    # These are placeholders - replace with the coordinates of your interest points!
-    xs = np.asarray([0])
-    ys = np.asarray([0])
+    # 计算水平、竖直方向的梯度矩阵，计算平方和乘积
+    partial_x = filters.sobel_h(image)
+    partial_x2 = np.square(partial_x)
+    partial_y = filters.sobel_v(image)
+    partial_y2 = np.square(partial_y)
+    partial_xy = partial_x * partial_y
+
+    # 使用高斯函数对I2x、I2y和Ixy进行高斯加权
+    sigma = 1.0
+    partial_x2 = filters.gaussian(partial_x2, sigma=sigma)
+    partial_y2 = filters.gaussian(partial_y2, sigma=sigma)
+    partial_xy = filters.gaussian(partial_xy, sigma=sigma)
+
+    if len(image.shape) == 2:
+        h, w = image.shape
+    else:
+        h, w, _ = image.shape
+
+    # 得到每一个位置上的2*2的系数矩阵M： Ix2 Ixy Ixy Iy2
+    M = np.zeros(h * w * 4, np.float32)
+    M[0::4] = partial_x2.flatten()
+    M[1::4] = partial_xy.flatten()
+    M[2::4] = partial_xy.flatten()
+    M[3::4] = partial_y2.flatten()
+    M = M.reshape((-1, 2, 2))
+
+    # 求所有系数矩阵的行列式和迹
+    det_M = np.linalg.det(M)
+    tr_M = np.trace(M, axis1=1, axis2=2)
+
+    # 角点计算公式中的经验常数k
+    k = 0.04
+    c = 0.02
+
+    # 使用角点计算公式计算所有位置的角点响应值
+    cornerness = det_M - k * np.square(tr_M)
+
+    # 不合格的值全部置0
+    cornerness[cornerness < c * cornerness.max()] = 0
+
+    # 转化为原大小的矩阵，每个位置的值与其坐标相对应
+    cornerness = cornerness.reshape((h, w))
+
+    # 非极大值抑制，获得区域极大值位置坐标(xs,xy)
+    coordinates = feature.peak_local_max(cornerness, min_distance=15)
+
+    # 分别取出xs和xy返回
+    xs = coordinates[:, 1]
+    ys = coordinates[:, 0]
 
     return xs, ys
 
@@ -119,9 +163,8 @@ def get_features(image, x, y, feature_width):
 
     '''
 
-    # TODO: Your implementation here! 
+    # TODO: Your implementation here!
 
-    # This is a placeholder - replace this with your features!
     features = np.asarray([0])
 
     return features
@@ -166,10 +209,7 @@ def match_features(im1_features, im2_features):
     '''
 
     # TODO: Your implementation here!
-
-    # These are placeholders - replace with your matches and confidences!
-
-    matches = np.asarray([0,0])
+    matches = np.asarray([0, 0])
     confidences = np.asarray([0])
 
     return matches, confidences
