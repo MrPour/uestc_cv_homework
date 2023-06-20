@@ -171,7 +171,7 @@ def get_features(image, x, y, feature_width):
     offset = feature_width // 2
     num_points = x.shape[0]
 
-    # Range of index
+    # 计算索引范围
     x_start = x - offset
     x_stop = x + offset
     y_start = y - offset
@@ -199,25 +199,25 @@ def get_features(image, x, y, feature_width):
     y_start += y_pad[0]
     y_stop += y_pad[0]
 
-    # Pad the input image
+    # 对图片进行pudding
     image = np.pad(image, [y_pad, x_pad], mode="constant")
 
-    # Index under the window for each dimension
+    # 对每个维度窗口下建立索引
     cell_size = 4
     num_blocks = feature_width // cell_size
 
     x_idx = np.array([np.arange(start, stop) for start, stop in zip(x_start, x_stop)])
     y_idx = np.array([np.arange(start, stop) for start, stop in zip(y_start, y_stop)])
 
-    # Before transpose -> (num_blocks, num_points, cell_size)
+    # 转置之前 ：(num_blocks, num_points, cell_size)
     x_idx = np.array(np.split(x_idx, num_blocks, axis=1))
     y_idx = np.array(np.split(y_idx, num_blocks, axis=1))
 
-    # After transpose -> (num_points, num_blocks, cell_size)
+    # 转置之后：(num_points, num_blocks, cell_size)
     x_idx = x_idx.transpose([1, 0, 2])
     y_idx = y_idx.transpose([1, 0, 2])
 
-    # Index for every pixel under the window
+    # 对窗口中的每个像素建立索引
     x_idx = np.tile(np.tile(x_idx, cell_size), [1, num_blocks, 1]).flatten()
     y_idx = np.tile(np.repeat(y_idx, cell_size, axis=2), num_blocks).flatten()
 
@@ -228,26 +228,25 @@ def get_features(image, x, y, feature_width):
     magnitude = np.sqrt(partial_x * partial_x + partial_y * partial_y)
     # 计算梯度方向
     orientation = np.arctan2(partial_y, partial_x) + np.pi
-    # Assign gradient to the nearest angle. Should use round instead of floor
+    # 梯度近似为最近的角度
     orientation = np.mod(np.round(orientation / (2.0 * np.pi) * 8.0), 8)
     orientation = orientation.astype(np.int32)
-    # Smooth the gradient magnitude
+    # 对梯度做高斯平滑
     magnitude = filters.gaussian(magnitude, sigma=offset)
 
-    # Retrieve values of all patches as an 1D array
+    # 所有的块数据转为1维
     magnitude_in_pixels = magnitude[y_idx, x_idx]
     orientation_in_pixels = orientation[y_idx, x_idx]
 
-    # Reshape the pixel array to (num_patches, cell_size, cell_size)
+    # 转为数组 (num_patches, cell_size, cell_size)
     magnitude_in_cells = magnitude_in_pixels.reshape((-1, cell_size * cell_size))
     orientation_in_cells = orientation_in_pixels.reshape((-1, cell_size * cell_size))
 
-    # Compute weight sum of orientations in each cell
+    # 对每个cel计算梯度方向加权和
     features = np.array(list(
         map(lambda array, weight: np.bincount(array, weight, minlength=8), orientation_in_cells, magnitude_in_cells)))
 
-    # Reshape the features to (num_points, feature_length), each row represents the feature for a keypoint
-    # Normalize -> Clamp -> Renormalize
+    # 每一行都是角点对应的一个特征向量
     features = features.reshape((num_points, -1))
     features = features / np.linalg.norm(features, axis=-1).reshape((-1, 1))
     features[features >= 0.2] = 0.2

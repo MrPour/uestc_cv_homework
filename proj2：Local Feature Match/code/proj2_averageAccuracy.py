@@ -5,7 +5,7 @@ from skimage.color import rgb2gray
 
 import student
 import visualize
-from main import load_data
+from utils import load_data
 from helpers import evaluate_correspondence
 
 
@@ -34,8 +34,8 @@ def averageAccuracy( student ):
     ###### ###### ###### ###### ###### ###### ###### ###### ###### ###### ######
     print("Notre Dame de Paris")
     image1, image2, eval_file = load_data('notre_dame')
-    image1 = rgb2gray(rescale(image1, scale_factor))
-    image2 = rgb2gray(rescale(image2, scale_factor))
+    image1 = rgb2gray(rescale(image1, scale_factor, multichannel=True))
+    image2 = rgb2gray(rescale(image2, scale_factor, multichannel=True))
 
     x1, y1, x2, y2, matches, confidences = find_matches( student, image1, image2, eval_file )
 
@@ -47,8 +47,8 @@ def averageAccuracy( student ):
     ###### ###### ###### ###### ###### ###### ###### ###### ###### ###### ######
     print("Mount Rushmore")
     image1, image2, eval_file = load_data('mt_rushmore')
-    image1 = rgb2gray(rescale(image1, scale_factor))
-    image2 = rgb2gray(rescale(image2, scale_factor))
+    image1 = rgb2gray(rescale(image1, scale_factor, multichannel=True))
+    image2 = rgb2gray(rescale(image2, scale_factor, multichannel=True))
 
     x1, y1, x2, y2, matches, confidences = find_matches( student, image1, image2, eval_file )
 
@@ -60,8 +60,8 @@ def averageAccuracy( student ):
     ###### ###### ###### ###### ###### ###### ###### ###### ###### ###### ######
     print("Episcopal Guadi")
     image1, image2, eval_file = load_data('e_gaudi')
-    image1 = rgb2gray(rescale(image1, scale_factor))
-    image2 = rgb2gray(rescale(image2, scale_factor))
+    image1 = rgb2gray(rescale(image1, scale_factor, multichannel=True))
+    image2 = rgb2gray(rescale(image2, scale_factor, multichannel=True))
     
     x1, y1, x2, y2, matches, confidences = find_matches( student, image1, image2, eval_file )
 
