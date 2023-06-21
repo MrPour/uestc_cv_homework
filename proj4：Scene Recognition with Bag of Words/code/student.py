@@ -2,8 +2,9 @@ import numpy as np
 import matplotlib
 # from skimage.io import imread
 from PIL import Image
-from skimage.color import rgb2grey
+from skimage.color import rgb2gray
 from skimage.feature import hog
+from skimage.io import imread
 from skimage.transform import resize
 from scipy.spatial.distance import cdist
 from sklearn.cluster import MiniBatchKMeans
@@ -42,8 +43,13 @@ def get_tiny_images(image_paths):
     '''
 
     #TODO: Implement this function!
+    f = lambda x: resize(imread(x), (16, 16)).flatten()
+    tiny_images = np.array(list(map(f, image_paths)))
 
-    return np.array([])
+    # Normalize the features
+    tiny_images = tiny_images / np.linalg.norm(tiny_images, axis=1).reshape((-1, 1))
+
+    return tiny_images
 
 def build_vocabulary(image_paths, vocab_size):
     '''
@@ -121,9 +127,16 @@ def build_vocabulary(image_paths, vocab_size):
     '''
 
     #TODO: Implement this function!
-    
+    z = 3
+    f = lambda x: hog(imread(x), orientations=9, cells_per_block=(z, z), transform_sqrt=True,
+                      feature_vector=True).reshape(-1, z * z * 9).astype(np.float32)
+    hog_feats = np.concatenate(list(map(f, image_paths)), axis=0)
 
-    return np.array([])
+    cluster = MiniBatchKMeans(n_clusters=vocab_size, max_iter=1000)
+    cluster.fit(hog_feats)
+    centers = cluster.cluster_centers_
+
+    return centers
 
 def get_bags_of_words(image_paths):
     '''
@@ -159,9 +172,37 @@ def get_bags_of_words(image_paths):
     print('Loaded vocab from file.')
 
     #TODO: Implement this function!
+    vocab = np.load('vocab.npy')
+    vocab_size, feat_dim = vocab.shape
+    print('Loaded vocab from file.')
 
-    
-    return np.array([])
+    # TODO: Implement this function!
+
+    z = 3
+    f = lambda x: hog(imread(x), orientations=9, cells_per_block=(z, z), transform_sqrt=True,
+                      feature_vector=True).reshape(-1, z * z * 9).astype(np.float32)
+    hog_feats = list(map(f, image_paths))
+
+    # Get number of blocks in each image
+    num_blocks_per_image = np.array(list(map(lambda x: x.shape[0], hog_feats)))
+
+    # Concatenate all HoG features
+    hog_feats = np.concatenate(hog_feats, axis=0)
+
+    # Compute Euclidean distance
+    distances = cdist(hog_feats, vocab, 'euclidean')
+    # Assign each HoG feature to the nearest cluster center
+    sorted_index = np.argsort(distances, axis=1)
+    # Group features according to the number of block in each image
+    closest_vectors = np.split(sorted_index[:, 0], np.cumsum(num_blocks_per_image)[:-1])
+
+    f = lambda x: np.bincount(x, minlength=vocab_size)
+    images_histograms = np.array(list(map(f, closest_vectors)))
+
+    # Normalize the BoW features, this helps to improve the performance
+    images_histograms = images_histograms / np.linalg.norm(images_histograms, axis=1).reshape((-1, 1))
+
+    return images_histograms
 
 def svm_classify(train_image_feats, train_labels, test_image_feats):
     '''
@@ -189,8 +230,11 @@ def svm_classify(train_image_feats, train_labels, test_image_feats):
     '''
 
     # TODO: Implement this function!
-   
-    return np.array([])
+    clf = LinearSVC(multi_class="ovr", C=1.5, max_iter=5000)
+    clf.fit(train_image_feats, train_labels)
+    predicted_categories = clf.predict(test_image_feats)
+
+    return predicted_categories
 
 def nearest_neighbor_classify(train_image_feats, train_labels, test_image_feats):
     '''
@@ -236,12 +280,30 @@ def nearest_neighbor_classify(train_image_feats, train_labels, test_image_feats)
     # Gets the distance between each test image feature and each train image feature
     # e.g., cdist
     distances = cdist(test_image_feats, train_image_feats, 'euclidean')
-
+    sorted_index = np.argsort(distances, axis=1)
     #TODO:
     # 1) Find the k closest features to each test image feature in euclidean space
     # 2) Determine the labels of those k features
     # 3) Pick the most common label from the k
     # 4) Store that label in a list
-    
 
-    return np.array([])
+    cats = np.unique(train_labels)
+    (num_cats,) = cats.shape
+    str2int_dict = dict(zip(cats, range(0, num_cats)))
+    f = lambda x: str2int_dict[x]
+    int_train_labels = np.array(list(map(f, train_labels)))
+
+    # Find k nearest neighbors
+    top_k_index = sorted_index[:, :k].flatten()
+    knn = int_train_labels[top_k_index].reshape((-1, k))
+
+    # Voting
+    f = lambda x: np.bincount(x, minlength=num_cats)
+    hist = np.array(list(map(f, knn)))
+    int_test_labels = np.argmax(hist, axis=1)
+
+    int2str_dict = dict(zip(range(0, num_cats), cats))
+    f = lambda x: int2str_dict[x]
+    predicted_categories = np.array(list(map(f, int_test_labels)))
+
+    return predicted_categories
